@@ -95,9 +95,8 @@ def run_pipeline():
         log(f"      VIX: {macro.vix} | 10Y: {macro.treasury_10y}% | DXY: {macro.dxy}")
         log(f"      Gold: ${macro.gold} | Oil: ${macro.oil_wti}")
     except Exception as e:
-        results["steps"]["market_data"] = f"FAIL: {str(e)}"
-        results["errors"].append(f"market_data: {str(e)}")
-        log(f"      ERROR: {e}")
+        log(f"      FATAL: Market data fetch failed: {e}")
+        raise RuntimeError(f"Market data ingestion failed: {e}") from e
 
     # Step 1b: Collect FII flow data
     log("[1b/8] Collecting FII flow intelligence...")
@@ -107,9 +106,8 @@ def run_pipeline():
         results["steps"]["fii_flow"] = fii_report.get("data_quality", "NO_DATA")
         log(f"      Regime: {fii_report.get('flow_regime', {}).get('label', 'N/A')} | Net: {fii_report.get('monthly', {}).get('monthly_net_cr')}")
     except Exception as e:
-        results["steps"]["fii_flow"] = f"FAIL: {str(e)}"
-        results["errors"].append(f"fii_flow: {str(e)}")
-        log(f"      ERROR: {e}")
+        log(f"      FATAL: FII flow fetch failed: {e}")
+        raise RuntimeError(f"FII flow ingestion failed: {e}") from e
 
     # Step 2: Classify regime
     log("[2/8] Classifying market regime...")
@@ -121,10 +119,8 @@ def run_pipeline():
         log(f"      Regime: {regime.regime} (confidence: {regime.confidence:.1%})")
         log(f"      Summary: {regime.summary}")
     except Exception as e:
-        results["steps"]["regime"] = f"FAIL: {str(e)}"
-        results["errors"].append(f"regime: {str(e)}")
-        log(f"      ERROR: {e}")
-        regime = None
+        log(f"      FATAL: Regime classification failed: {e}")
+        raise RuntimeError(f"Regime classification failed: {e}") from e
 
     # Step 2.5: Generate new observations from today's data
     log("[2.5/10] Generating observations from today's market data...")
@@ -229,9 +225,8 @@ def run_pipeline():
         results["steps"]["predictions"] = f"{len(predictions)} generated"
         log(f"      Generated {len(predictions)} predictions")
     except Exception as e:
-        results["steps"]["predictions"] = f"FAIL: {str(e)}"
-        results["errors"].append(f"predictions: {str(e)}")
-        log(f"      ERROR: {e}")
+        log(f"      FATAL: Prediction generation failed: {e}")
+        raise RuntimeError(f"Prediction generation failed: {e}") from e
 
     # Step 4: Apply risk governance
     log("[4/8] Applying risk governance...")
@@ -308,14 +303,14 @@ def run_pipeline():
                         pred.stop_loss
                     ))
                 except Exception as insert_err:
-                    log(f"      WARN: Could not insert prediction {pred.prediction_id}: {insert_err}")
+                    log(f"      FATAL: Could not insert prediction {pred.prediction_id}: {insert_err}")
+                    raise RuntimeError(f"Ledger write failed for {pred.prediction_id}: {insert_err}") from insert_err
 
         results["steps"]["ledger"] = f"{len(predictions)} recorded"
         log(f"      Recorded {len(predictions)} predictions to ledger (vetoes already saved by Risk Manager)")
     except Exception as e:
-        results["steps"]["ledger"] = f"FAIL: {str(e)}"
-        results["errors"].append(f"ledger: {str(e)}")
-        log(f"      ERROR: {e}")
+        log(f"      FATAL: Ledger recording failed: {e}")
+        raise RuntimeError(f"Ledger recording failed: {e}") from e
 
     # Step 7: Git sync (skip on GitHub Actions)
     log("[7/8] Syncing data...")

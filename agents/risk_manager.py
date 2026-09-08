@@ -133,8 +133,8 @@ class RiskManager:
                 conn.commit()
             return True
         except Exception as e:
-            logger.warning(f"Veto save failed: {e}")
-            return False
+            logger.error(f"FATAL: Veto save failed: {e}")
+            raise RuntimeError(f"Veto archival failed: {e}") from e
 
     def _get_regime_config(self, regime: str) -> Dict[str, Any]:
         """Get risk thresholds for current regime."""

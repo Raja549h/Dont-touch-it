@@ -185,13 +185,13 @@ Do NOT use retail trading language, emoji, or hype. Write like a Goldman Sachs r
 
         try:
             import json
-            from pydantic import BaseModel
+            from pydantic import BaseModel, Field
             
             class LLMPredictionOutput(BaseModel):
-                thesis: str
-                entry_price: float
-                target_price: float
-                stop_loss: float
+                thesis: str = Field(min_length=10)
+                entry_price: float = Field(gt=0)
+                target_price: float = Field(gt=0)
+                stop_loss: float = Field(gt=0)
 
             response = self.mistral_client.chat.completions.create(
                 model=LLM_MODEL,
@@ -207,13 +207,8 @@ Do NOT use retail trading language, emoji, or hype. Write like a Goldman Sachs r
             parsed = LLMPredictionOutput.model_validate_json(content)
             return parsed.model_dump()
         except Exception as e:
-            logger.warning(f"LLM thesis generation failed: {e}")
-            return {
-                "thesis": self._generate_simple_thesis(ticker, profile, regime, macro, tech),
-                "entry_price": profile.price if profile else 0.0,
-                "target_price": 0.0,
-                "stop_loss": 0.0
-            }
+            logger.error(f"LLM thesis generation FAILED for {ticker}: {e}")
+            raise ValueError(f"LLM thesis generation failed for {ticker}: {e}") from e
 
     def _generate_simple_thesis(self, ticker: str, profile, regime: str, macro: Dict, tech: Dict) -> str:
         """Generate thesis without LLM — rule-based institutional language."""
@@ -482,7 +477,7 @@ Do NOT use retail trading language, emoji, or hype. Write like a Goldman Sachs r
             conn.close()
             logger.info(f"Active trades cooldown filter: Found {len(active_tickers)} tickers actively trading.")
         except Exception as e:
-            logger.warning(f"Failed to fetch active trades for cooldown filter: {e}")
+            raise RuntimeError(f"Cannot verify active positions (duplicate risk): {e}") from e
 
         predictions = []
         for ticker in tickers:

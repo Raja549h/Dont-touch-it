@@ -255,11 +255,7 @@ def _get_fii_flow_summary_impl():
                 'source': r.get('source', 'unknown'),
             }
     except Exception as e:
-        print(f"Error caught: {e}")
-    return {
-        'daily_net_cr': 0, 'weekly_net_cr': 0, 'monthly_net_cr': 0,
-        'regime': 'NEUTRAL', 'source': 'fallback',
-    }
+        raise ConnectionError(f"FII flow data fetch failed: {e}") from e
 
 def get_fii_flow_summary():
     return _with_timeout(_get_fii_flow_summary_impl, timeout_sec=15, default={
@@ -278,15 +274,7 @@ def _get_edge_score_impl():
         if score and score.get('edge_score') is not None:
             return score
     except Exception as e:
-        print(f"Error caught: {e}")
-    return {
-        'total': 3, 'confirmed': 1, 'partially_confirmed': 1,
-        'invalidated': 0, 'active': 1, 'monitoring': 0,
-        'accuracy_rate': 0.67, 'weighted_accuracy': 0.83,
-        'edge_score': 78.4, 'avg_confidence': 0.81,
-        'best_categories': ['margin', 'valuation'],
-        'worst_categories': [],
-    }
+        raise ValueError(f"Failed to calculate edge score: {e}") from e
 
 def get_edge_score():
     return _with_timeout(_get_edge_score_impl, timeout_sec=15)
@@ -302,8 +290,7 @@ def _get_macro_health_impl():
                 'observation': report.get('observation', ''),
             }
     except Exception as e:
-        print(f"Error caught: {e}")
-    return {'composite_score': 62, 'status': 'MODERATE', 'observation': 'Macro conditions stable with moderate inflation and steady growth indicators.'}
+        raise ValueError(f"Failed to fetch macro health report: {e}") from e
 
 def get_macro_health():
     return _with_timeout(_get_macro_health_impl, timeout_sec=15)
@@ -705,6 +692,6 @@ if __name__ == '__main__':
         print(f"[FATAL] email_digest.py crashed: {e}")
         import traceback
         traceback.print_exc()
-        # Exit 0 so the pipeline doesn't fail on email errors
-        sys.exit(0)
+        # Exit 1 — a crash must be visible to the CI pipeline
+        sys.exit(1)
 
