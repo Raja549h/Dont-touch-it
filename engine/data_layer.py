@@ -133,6 +133,38 @@ class DataLayer:
         self._cache[key] = data
         self._cache_timestamps[key] = time.time()
 
+    def _proxied_get(self, url: str, headers: Optional[Dict] = None, timeout: int = 15) -> Any:
+        """
+        Proxy-aware HTTP GET. If PROXY_API_KEY is set, routes through the proxy
+        endpoint to bypass cloud IP blocks on external financial data APIs.
+        Raises ConnectionError immediately on any failure (fail-fast).
+        """
+        import requests
+
+        proxy_key = os.environ.get("PROXY_API_KEY", "")
+        if proxy_key:
+            # Bright Data / ScraperAPI-style proxy: pass URL as a query parameter
+            proxy_url = f"https://api.scraperapi.com/?api_key={proxy_key}&url={requests.utils.quote(url, safe='')}"
+            logger.info(f"[PROXY] Routing via proxy: {url[:80]}")
+            try:
+                resp = requests.get(proxy_url, headers=headers, timeout=timeout)
+            except Exception as e:
+                raise ConnectionError(f"Proxy request failed for {url}: {e}") from e
+        else:
+            logger.info(f"[DIRECT] Fetching: {url[:80]}")
+            try:
+                resp = requests.get(url, headers=headers, timeout=timeout)
+            except Exception as e:
+                raise ConnectionError(f"Direct request failed for {url}: {e}") from e
+
+        if resp.status_code != 200:
+            raise ConnectionError(
+                f"HTTP {resp.status_code} fetching {url[:80]} "
+                f"(proxy={'yes' if proxy_key else 'no'})"
+            )
+        return resp
+
+
     def _save_cache_file(self, key: str, data: Any):
         try:
             filepath = self.cache_dir / f"{key}.json"
@@ -505,19 +537,19 @@ class DataLayer:
             }
 
             url = "https://efts.sec.gov/LATEST/search-index?q=13F&date_range=90d"
-            response = requests.get(url, headers=headers, timeout=15)
-
-            if response.status_code == 200:
-                data = response.json()
-                hits = data.get('hits', [])
-                if isinstance(hits, list):
-                    filings = hits[:10]
-                    for filing in filings:
-                        result["recent_filings"].append({
-                            "filer": filing.get('filer', ''),
-                            "date": filing.get('filing_date', ''),
-                            "value": filing.get('value', 0)
-                        })
+            response = self._proxied_get(url, headers=headers, timeout=15)
+            data = response.json()
+            hits = data.get('hits', [])
+            if isinstance(hits, list):
+                filings = hits[:10]
+                for filing in filings:
+                    result["recent_filings"].append({
+                        "filer": filing.get('filer', ''),
+                        "date": filing.get('filing_date', ''),
+                        "value": filing.get('value', 0)
+                    })
+        except ConnectionError:
+            raise
         except Exception as e:
             logger.warning(f"SEC 13F fetch failed: {e}")
 
@@ -550,7 +582,6 @@ class DataLayer:
         }
 
         try:
-            import requests
             base = "https://api.worldbank.org/v2/country"
 
             indicators = {
@@ -561,14 +592,15 @@ class DataLayer:
 
             for ind_code, ind_name in indicators.items():
                 url = f"{base}/IND/indicator/{ind_code}?date=2023:2026&format=json"
-                response = requests.get(url, timeout=10)
-                if response.status_code == 200:
-                    data = response.json()
-                    if len(data) > 1 and data[1]:
-                        latest = data[1][0]
-                        value = latest.get('value')
-                        if value is not None:
-                            result[f"india_{ind_name}"] = round(float(value), 2)
+                response = self._proxied_get(url, timeout=10)
+                data = response.json()
+                if len(data) > 1 and data[1]:
+                    latest = data[1][0]
+                    value = latest.get('value')
+                    if value is not None:
+                        result[f"india_{ind_name}"] = round(float(value), 2)
+        except ConnectionError:
+            raise
         except Exception as e:
             logger.warning(f"World Bank fetch failed: {e}")
 

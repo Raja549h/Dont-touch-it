@@ -303,6 +303,16 @@ def run_pipeline():
                         pred.stop_loss
                     ))
                 except Exception as insert_err:
+                    from psycopg2 import errors as pg_errors
+                    if isinstance(insert_err, pg_errors.CheckViolation):
+                        log(f"      FATAL: DB CHECK constraint violation for {pred.prediction_id} "
+                            f"(confidence={pred.confidence}). LLM output below minimum threshold. "
+                            f"Error: {insert_err}")
+                        raise RuntimeError(
+                            f"CheckViolation: prediction {pred.prediction_id} confidence={pred.confidence} "
+                            f"failed DB constraint (confidence >= 50 required). "
+                            f"This indicates an LLM hallucination slipped past application-level checks."
+                        ) from insert_err
                     log(f"      FATAL: Could not insert prediction {pred.prediction_id}: {insert_err}")
                     raise RuntimeError(f"Ledger write failed for {pred.prediction_id}: {insert_err}") from insert_err
 
