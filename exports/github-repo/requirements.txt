@@ -1,2 +1,0 @@
-# Core dependencies for the 4D Scorer
-typing>=3.7.4

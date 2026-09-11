@@ -87,70 +87,7 @@ def has_cleared_predictions():
         return False
 
 
-def seed_meaningful_data():
-    init_tables()
-    if has_cleared_predictions():
-        return
-    try:
-        with get_db_connection() as conn:
-            c = conn.cursor()
-            now = datetime.now(timezone.utc)
-            today_cleared = 0
-            c.execute("SELECT COUNT(*) as cnt FROM prediction_ledger WHERE timestamp LIKE %s AND status = 'cleared'",
-                      (f"{now.strftime('%Y-%m-%d')}%",))
-            row = c.fetchone()
-            if row:
-                today_cleared = row['cnt'] or 0
-            c.execute("SELECT COUNT(*) as cnt FROM veto_archive")
-            veto_count = c.fetchone()['cnt'] or 0
-            if today_cleared == 0:
-                cleared_count = 0
-                for i in range(3):
-                    try:
-                        c.execute("""
-                            INSERT INTO prediction_ledger 
-                            (prediction_id, timestamp, asset, sector, thesis, confidence_score, status, expected_timeline_days, created_at, updated_at)
-                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                        """, (
-                            str(uuid.uuid4()),
-                            (now - timedelta(hours=i)).isoformat() + "Z",
-                            random.choice(['RELIANCE.NS', 'TCS.NS', 'HDFCBANK.NS', 'INFY.NS', 'BAJFINANCE.NS']),
-                            'Technology',
-                            f"Sample intelligence generated for layout visualization {i}",
-                            round(random.uniform(70.0, 95.0), 1),
-                            'cleared',
-                            30,
-                            now.isoformat() + "Z",
-                            now.isoformat() + "Z"
-                        ))
-                        cleared_count += 1
-                    except Exception as e:
-                        print(f"Error caught: {e}")
-                print(f"[seed] Inserted {cleared_count} cleared predictions")
-            if veto_count < 10:
-                seeded_vetoes = 0
-                for i in range(5):
-                    try:
-                        c.execute("""
-                            INSERT INTO veto_archive 
-                            (veto_id, timestamp, asset, sector, rejection_reason, expected_loss_pct, created_at)
-                            VALUES (%s, %s, %s, %s, %s, %s, %s)
-                        """, (
-                            str(uuid.uuid4()),
-                            (now - timedelta(hours=i*2)).isoformat() + "Z",
-                            random.choice(['ZOMATO.NS', 'PAYTM.NS', 'NYKAA.NS', 'IDEA.NS', 'YESBANK.NS']),
-                            'Volatile',
-                            f"Sample risk veto for excessive volatility {i}",
-                            round(random.uniform(5.0, 15.0), 1),
-                            now.isoformat() + "Z"
-                        ))
-                        seeded_vetoes += 1
-                    except Exception as e:
-                        print(f"Error caught: {e}")
-                if seeded_vetoes > 0:
-                    print(f"[seed] Inserted {seeded_vetoes} veto records")
-    except Exception as e:
-        print(f"[seed] Error seeding: {e}")
+
 
 
 def _with_timeout(fn, *args, timeout_sec=15, default=None):

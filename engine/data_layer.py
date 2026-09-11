@@ -553,12 +553,6 @@ class DataLayer:
         except Exception as e:
             logger.warning(f"SEC 13F fetch failed: {e}")
 
-        if not result["recent_filings"]:
-            result["recent_filings"] = [
-                {"filer": "Berkshire Hathaway", "date": "2026-Q1", "value": 350000000000},
-                {"filer": "Bridgewater Associates", "date": "2026-Q1", "value": 135000000000},
-                {"filer": "Renaissance Technologies", "date": "2026-Q1", "value": 65000000000},
-            ]
 
         self._set_cache(cache_key, result)
         return result
@@ -604,10 +598,6 @@ class DataLayer:
         except Exception as e:
             logger.warning(f"World Bank fetch failed: {e}")
 
-        if result["india_gdp_growth"] == 0:
-            result["india_gdp_growth"] = 6.5
-            result["india_inflation"] = 5.2
-            result["india_current_account"] = -1.2
 
         self._set_cache(cache_key, result)
         return result
